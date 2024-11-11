@@ -17,65 +17,94 @@ To Implement an Auto Regressive Model using Python
 ## PROGRAM
 ```python
 # Import necessary libraries
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
+from statsmodels.tsa.ar_model import AutoReg
 from sklearn.metrics import mean_squared_error
 
-# Load the data from the CSV file
-data = pd.read_csv('raw_sales.csv', index_col=0, parse_dates=True)
+# Load the dataset
+data = pd.read_csv('future_gold_price.csv')
 
-# Display the first few rows (GIVEN DATA)
-print("GIVEN DATA:")
-print(data.head())
+# Convert 'Date' column to datetime format and set it as the index
+data['Date'] = pd.to_datetime(data['Date'])
+data.set_index('Date', inplace=True)
 
-# Perform Augmented Dickey-Fuller test for stationarity
-result = adfuller(data['price'])
+# Use 'Close' price as the target variable, removing commas and converting to numeric
+data['Close'] = data['Close'].replace(',', '', regex=True).astype(float)
+
+# Resample data to monthly frequency, taking the mean of 'Close' prices per month
+monthly_data = data['Close'].resample('M').mean().dropna()
+
+# Check for stationarity using the Augmented Dickey-Fuller (ADF) test
+result = adfuller(monthly_data)
 print('ADF Statistic:', result[0])
 print('p-value:', result[1])
 
-# Split the data into training and testing sets
-train_size = int(len(data) * 0.8)
-train, test = data[:train_size], data[train_size:]
+# Split the data into training and testing sets (80% training, 20% testing)
+train_data = monthly_data.iloc[:int(0.8 * len(monthly_data))]
+test_data = monthly_data.iloc[int(0.8 * len(monthly_data)):]
 
-# Fit an AutoRegressive (AR) model with 13 lags
-model = AutoReg(train['price'], lags=13)
+# Define the lag order for the AutoRegressive model based on seasonality
+lag_order = 12  # Monthly lag for seasonal data
+model = AutoReg(train_data, lags=lag_order)
 model_fit = model.fit()
 
-# Make predictions using the AR model
-predictions = model_fit.predict(start=len(train), end=len(train) + len(test) - 1, dynamic=False)
-
-# Calculate Mean Squared Error (MSE)
-mse = mean_squared_error(test['price'], predictions)
-print('Mean Squared Error:', mse)
-
-# Plot Partial Autocorrelation Function (PACF) and Autocorrelation Function (ACF)
-plt.figure(figsize=(10,6))
-plt.subplot(211)
-plot_pacf(train['price'], lags=13, ax=plt.gca())
-plt.title("PACF - Partial Autocorrelation Function")
-plt.subplot(212)
-plot_acf(train['price'], lags=13, ax=plt.gca())
-plt.title("ACF - Autocorrelation Function")
-plt.tight_layout()
+# Plot Autocorrelation Function (ACF)
+plt.figure(figsize=(10, 6))
+plot_acf(monthly_data, lags=40, alpha=0.05)
+plt.title('Autocorrelation Function (ACF) - Monthly Gold Prices')
 plt.show()
 
-# PREDICTION
-print("PREDICTION:")
-print(predictions)
+# Plot Partial Autocorrelation Function (PACF)
+plt.figure(figsize=(10, 6))
+plot_pacf(monthly_data, lags=40, alpha=0.05)
+plt.title('Partial Autocorrelation Function (PACF) - Monthly Gold Prices')
+plt.show()
 
-# Plot the test data and predictions (FINAL PREDICTION)
-plt.figure(figsize=(10,6))
-plt.plot(test.index, test['price'], label='Actual Price')
-plt.plot(test.index, predictions, color='red', label='Predicted Price')
-plt.title('Test Data vs Predictions (FINAL PREDICTION)')
+# Make predictions on the test set
+predictions = model_fit.predict(start=len(train_data), end=len(train_data) + len(test_data) - 1)
+
+# Calculate Mean Squared Error (MSE) for predictions
+mse = mean_squared_error(test_data, predictions)
+print('Mean Squared Error (MSE):', mse)
+
+# Plot Test Data vs Predictions
+plt.figure(figsize=(12, 6))
+plt.plot(test_data.index, test_data, label='Test Data - Monthly Gold Prices', color='blue', linewidth=2)
+plt.plot(test_data.index, predictions, label='Predictions - Monthly Gold Prices', color='orange', linestyle='--', linewidth=2)
 plt.xlabel('Date')
-plt.ylabel('Price')
+plt.ylabel('Gold Price (USD)')
+plt.title('AR Model Predictions vs Test Data (Monthly Gold Prices)')
 plt.legend()
+plt.grid(True)
 plt.show()
+
+# Forecast Future Prices
+forecast_steps = 10  # Number of months to forecast
+future_predictions = model_fit.predict(start=len(monthly_data), end=len(monthly_data) + forecast_steps - 1)
+
+# Create a date range for future predictions
+future_dates = pd.date_range(start=monthly_data.index[-1] + pd.DateOffset(months=1), periods=forecast_steps, freq='M')
+
+# Plot historical prices, test predictions, and future forecasts
+plt.figure(figsize=(12, 6))
+plt.plot(monthly_data.index, monthly_data, label='Historical Prices')
+plt.plot(test_data.index, predictions, color='orange', label='Test Predictions', linestyle='--')
+plt.plot(future_dates, future_predictions, color='green', linestyle='--', label='Future Forecast')
+plt.xlabel('Date')
+plt.ylabel('Gold Price (USD)')
+plt.title('Gold Price Forecast')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Display future predictions
+print("Future Price Predictions:")
+print(future_predictions)
+
 ```
 ## OUTPUT:
 
@@ -95,11 +124,12 @@ plt.show()
 
 
 ### PREDICTION
-![Screenshot 2024-11-11 183004](https://github.com/user-attachments/assets/60a61a4b-4120-4150-afa3-dc3022bfac0c)
+![Screenshot 2024-11-11 183017](https://github.com/user-attachments/assets/db109afb-ae2f-41f1-81b7-7f19f79d4f64)
+
 
 
 ### FINAL PREDICTION
-![Screenshot 2024-11-11 183017](https://github.com/user-attachments/assets/d0e52042-fa42-44da-b162-6f56dfdc9389)
+![Screenshot 2024-11-11 183004](https://github.com/user-attachments/assets/2ee14d21-6981-4aa1-8dd0-02c0b434dfdd)
 
 
 ### RESULT:
